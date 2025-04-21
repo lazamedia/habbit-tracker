@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Habit Tracker</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="style-2.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-title">
+                <div class="app-logo">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="app-name">HabitTracker</div>
+            </div>
+            <div class="header-actions">
+                <button class="icon-button" id="add-habit-btn">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+        </header>
+
+        <main>
+            <!-- Dashboard Page -->
+            <div class="page active" id="dashboard-page">
+                <div class="main-content">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-list"></i>
+                            </div>
+                            <div class="stat-title">Kebiasaan Aktif</div>
+                            <div class="stat-value" id="active-habits-count">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-fire"></i>
+                            </div>
+                            <div class="stat-title">Streak Terpanjang</div>
+                            <div class="stat-value" id="longest-streak">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-percentage"></i>
+                            </div>
+                            <div class="stat-title">Tingkat Kesuksesan</div>
+                            <div class="stat-value" id="success-rate">0%</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="fas fa-check"></i>
+                            </div>
+                            <div class="stat-title">Hari Ini</div>
+                            <div class="stat-value" id="today-completion">0/0</div>
+                        </div>
+                    </div>
+
+                    <div class="weekly-tracker" id="weekly-tracker-container">
+                        <div class="section-header">
+                            <h2 class="section-title">Lacak Mingguan</h2>
+                        </div>
+                        <div id="weekly-tracker">
+                            <!-- Will be populated with JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Habits Page -->
+            <div class="page" id="habits-page">
+                <div class="main-content">
+                    <div class="section-header">
+                        <h2 class="section-title">Daftar Kebiasaan</h2>
+                        <button class="add-habit-btn" id="habit-page-add-btn">
+                            <i class="fas fa-plus"></i> Tambah
+                        </button>
+                    </div>
+                    <div id="all-habits-list" class="habits-list">
+                        <!-- Habits will be loaded here -->
+                        <div class="empty-state" id="empty-habits">
+                            <div class="empty-icon">
+                                <i class="fas fa-clipboard-list"></i>
+                            </div>
+                            <div class="empty-text">Belum ada kebiasaan</div>
+                            <div class="empty-subtext">Mulai tambahkan kebiasaan yang ingin Anda lacak</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Page -->
+            <div class="page" id="analytics-page">
+                <div class="main-content">
+                    <h2 class="section-title">Analisis Kebiasaan</h2>
+                    
+                    <div class="analytics-controls">
+                        <div class="analytics-tabs">
+                            <div class="analytics-tab" data-range="day">
+                                <i class="fas fa-calendar-day"></i>
+                                <span>Hari Ini</span>
+                            </div>
+                            <div class="analytics-tab active" data-range="week">
+                                <i class="fas fa-calendar-week"></i>
+                                <span>Mingguan</span>
+                            </div>
+                            <div class="analytics-tab" data-range="month">
+                                <i class="fas fa-calendar-alt"></i>
+                                <span>Bulanan</span>
+                            </div>
+                        </div>
+                        
+                        <div class="date-navigation">
+                            <button id="previous-period" class="icon-button">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <span id="current-period">Periode</span>
+                            <button id="next-period" class="icon-button">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="analytics-section">
+                        <div class="chart-container">
+                            <h3 class="chart-title">Tingkat Kesuksesan</h3>
+                            <canvas id="success-rate-chart"></canvas>
+                            <div class="chart-placeholder" id="success-rate-placeholder">
+                                <i class="fas fa-chart-line fa-2x"></i>
+                                <div>Belum cukup data untuk ditampilkan</div>
+                            </div>
+                        </div>
+                        
+                        <div class="chart-container">
+                            <h3 class="chart-title">Progres Harian</h3>
+                            <canvas id="daily-progress-chart"></canvas>
+                            <div class="chart-placeholder" id="daily-progress-placeholder">
+                                <i class="fas fa-chart-bar fa-2x"></i>
+                                <div>Belum cukup data untuk ditampilkan</div>
+                            </div>
+                        </div>
+                        
+                        <div class="chart-container">
+                            <h3 class="chart-title">Kebiasaan Terbaik</h3>
+                            <canvas id="top-habits-chart"></canvas>
+                            <div class="chart-placeholder" id="top-habits-placeholder">
+                                <i class="fas fa-award fa-2x"></i>
+                                <div>Belum cukup data untuk ditampilkan</div>
+                            </div>
+                        </div>
+                        
+                        <div class="chart-container">
+                            <h3 class="chart-title">Distribusi Kategori</h3>
+                            <canvas id="category-chart"></canvas>
+                            <div class="chart-placeholder" id="category-placeholder">
+                                <i class="fas fa-chart-pie fa-2x"></i>
+                                <div>Belum cukup data untuk ditampilkan</div>
+                            </div>
+                        </div>
+                        
+                        <div class="chart-container">
+                            <h3 class="chart-title">Tren Bulanan</h3>
+                            <canvas id="monthly-overview-chart"></canvas>
+                            <div class="chart-placeholder" id="monthly-overview-placeholder">
+                                <i class="fas fa-calendar-alt fa-2x"></i>
+                                <div>Belum cukup data untuk ditampilkan</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <a href="#" class="nav-item active" data-page="dashboard-page">
+                <i class="fas fa-home"></i>
+                <span>Beranda</span>
+            </a>
+            <a href="#" class="nav-item" data-page="habits-page">
+                <i class="fas fa-list"></i>
+                <span>Kebiasaan</span>
+            </a>
+            <a href="#" class="nav-item" data-page="analytics-page">
+                <i class="fas fa-chart-line"></i>
+                <span>Analisis</span>
+            </a>
+        </nav>
+    </div>
+
+    <!-- Add/Edit Habit Modal -->
+    <div class="modal-overlay" id="habit-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modal-title">Tambah Kebiasaan Baru</h2>
+                <button class="close-modal" id="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="habit-form">
+                    <input type="hidden" id="habit-id">
+                    <div class="form-group">
+                        <label for="habit-name" class="form-label">Nama Kebiasaan</label>
+                        <input type="text" id="habit-name" class="form-input" placeholder="mis. Meditasi Pagi" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Kategori</label>
+                        <input type="hidden" id="habit-category" required>
+                        <div class="categories-grid">
+                            <div class="category-box" data-category="health">
+                                <div class="category-icon">
+                                    <i class="fas fa-heart"></i>
+                                </div>
+                                <div class="category-name">Kesehatan</div>
+                            </div>
+                            <div class="category-box" data-category="fitness">
+                                <div class="category-icon">
+                                    <i class="fas fa-dumbbell"></i>
+                                </div>
+                                <div class="category-name">Kebugaran</div>
+                            </div>
+                            <div class="category-box" data-category="productivity">
+                                <div class="category-icon">
+                                    <i class="fas fa-laptop"></i>
+                                </div>
+                                <div class="category-name">Produktivitas</div>
+                            </div>
+                            <div class="category-box" data-category="mindfulness">
+                                <div class="category-icon">
+                                    <i class="fas fa-brain"></i>
+                                </div>
+                                <div class="category-name">Mindfulness</div>
+                            </div>
+                            <div class="category-box" data-category="learning">
+                                <div class="category-icon">
+                                    <i class="fas fa-book"></i>
+                                </div>
+                                <div class="category-name">Pembelajaran</div>
+                            </div>
+                            <div class="category-box" data-category="finance">
+                                <div class="category-icon">
+                                    <i class="fas fa-money-bill-wave"></i>
+                                </div>
+                                <div class="category-name">Keuangan</div>
+                            </div>
+                            <div class="category-box" data-category="other">
+                                <div class="category-icon">
+                                    <i class="fas fa-star"></i>
+                                </div>
+                                <div class="category-name">Lainnya</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Hari Pelaksanaan</label>
+                        <div class="days-grid">
+                            <div class="day-box" data-day="sun">MIN</div>
+                            <div class="day-box" data-day="mon">SEN</div>
+                            <div class="day-box" data-day="tue">SEL</div>
+                            <div class="day-box" data-day="wed">RAB</div>
+                            <div class="day-box" data-day="thu">KAM</div>
+                            <div class="day-box" data-day="fri">JUM</div>
+                            <div class="day-box" data-day="sat">SAB</div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="habit-goal" class="form-label">Target (opsional)</label>
+                        <input type="text" id="habit-goal" class="form-input" placeholder="mis. 30 menit, 2 liter, dll.">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="habit-notes" class="form-label">Catatan (opsional)</label>
+                        <textarea id="habit-notes" class="form-textarea" placeholder="Tambahkan catatan tentang kebiasaan ini..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-cancel" id="cancel-habit">Batal</button>
+                <button type="button" class="btn btn-primary" id="save-habit">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Dialog -->
+    <div class="confirm-dialog" id="confirm-dialog">
+        <div class="confirm-box">
+            <h3 class="confirm-title" id="confirm-title">Hapus Kebiasaan?</h3>
+            <p class="confirm-message" id="confirm-message">Apakah Anda yakin ingin menghapus kebiasaan ini? Tindakan ini tidak dapat dibatalkan.</p>
+            <div class="confirm-actions">
+                <button class="btn btn-cancel" id="cancel-confirm">Batal</button>
+                <button class="btn btn-primary" id="confirm-action">Hapus</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="app-2.js"></script>
+</body>
+</html>
