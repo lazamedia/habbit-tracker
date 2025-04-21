@@ -1,952 +1,1431 @@
-// app.js
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize the app
-    initApp();
-    
-    // Set up event listeners
-    setupEventListeners();
-    
-    // Load habits from storage
-    loadHabits();
-    
-    // Update UI
-    updateUI();
-});
+// State management
+const state = {
+    habits: [],
+    completions: [],
+    editing: null,
+    charts: {
+        successRate: null,
+        topHabits: null,
+        category: null,
+        dailyProgress: null,
+        monthlyOverview: null
+    },
+    deleteId: null,
+    currentDay: new Date(),
+    analytics: {
+        timeRange: 'week', // 'day', 'week', 'month'
+        startDate: null,
+        endDate: null
+    }
+};
 
-// Global variables
-let habits = [];
-let editingHabitId = null;
-let selectedIcon = 'fas fa-running';
-let selectedWeekdays = [0, 1, 2, 3, 4, 5, 6];
-let chart = null;
+// DOM Elements
+const elements = {
+    habitsList: document.getElementById('all-habits-list'),
+    emptyHabits: document.getElementById('empty-habits'),
+    habitModal: document.getElementById('habit-modal'),
+    habitForm: document.getElementById('habit-form'),
+    modalTitle: document.getElementById('modal-title'),
+    addHabitBtn: document.getElementById('add-habit-btn'),
+    habitPageAddBtn: document.getElementById('habit-page-add-btn'),
+    saveHabitBtn: document.getElementById('save-habit'),
+    cancelHabitBtn: document.getElementById('cancel-habit'),
+    closeModalBtn: document.getElementById('close-modal'),
+    habitId: document.getElementById('habit-id'),
+    habitName: document.getElementById('habit-name'),
+    habitCategory: document.getElementById('habit-category'),
+    habitGoal: document.getElementById('habit-goal'),
+    habitNotes: document.getElementById('habit-notes'),
+    weeklyTracker: document.getElementById('weekly-tracker'),
+    weeklyTrackerContainer: document.getElementById('weekly-tracker-container'),
+    navItems: document.querySelectorAll('.nav-item'),
+    pages: document.querySelectorAll('.page'),
+    confirmDialog: document.getElementById('confirm-dialog'),
+    confirmTitle: document.getElementById('confirm-title'),
+    confirmMessage: document.getElementById('confirm-message'),
+    confirmAction: document.getElementById('confirm-action'),
+    cancelConfirm: document.getElementById('cancel-confirm'),
+    toast: document.getElementById('toast'),
+    activeHabitsCount: document.getElementById('active-habits-count'),
+    longestStreak: document.getElementById('longest-streak'),
+    successRate: document.getElementById('success-rate'),
+    todayCompletion: document.getElementById('today-completion'),
+    analyticsTabs: document.querySelectorAll('.analytics-tab'),
+    successRateChart: document.getElementById('success-rate-chart'),
+    topHabitsChart: document.getElementById('top-habits-chart'),
+    categoryChart: document.getElementById('category-chart'),
+    dailyProgressChart: document.getElementById('daily-progress-chart'),
+    monthlyOverviewChart: document.getElementById('monthly-overview-chart'),
+    successRatePlaceholder: document.getElementById('success-rate-placeholder'),
+    topHabitsPlaceholder: document.getElementById('top-habits-placeholder'),
+    categoryPlaceholder: document.getElementById('category-placeholder'),
+    dailyProgressPlaceholder: document.getElementById('daily-progress-placeholder'),
+    monthlyOverviewPlaceholder: document.getElementById('monthly-overview-placeholder'),
+    previousPeriodBtn: document.getElementById('previous-period'),
+    nextPeriodBtn: document.getElementById('next-period'),
+    currentPeriodText: document.getElementById('current-period'),
+    categoryBoxes: document.querySelectorAll('.category-box'),
+    dayBoxes: document.querySelectorAll('.day-box')
+};
 
-// Initialize the app
-function initApp() {
-    // Update current date display
-    updateCurrentDate();
-    
-    // Set notification time default from storage
-    const savedNotificationTime = localStorage.getItem('notificationTime');
-    if (savedNotificationTime) {
-        document.getElementById('notification-time').value = savedNotificationTime;
+// Helper Functions
+function saveToLocalStorage() {
+    localStorage.setItem('habits', JSON.stringify(state.habits));
+    localStorage.setItem('completions', JSON.stringify(state.completions));
+}
+
+function loadFromLocalStorage() {
+    const habits = localStorage.getItem('habits');
+    const completions = localStorage.getItem('completions');
+
+    if (habits) {
+        state.habits = JSON.parse(habits);
+    }
+
+    if (completions) {
+        state.completions = JSON.parse(completions);
     }
 }
 
-// Update current date display
-function updateCurrentDate() {
-    const dateElement = document.getElementById('current-date');
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    const today = new Date();
-    dateElement.textContent = today.toLocaleDateString('id-ID', options);
+function generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
-// Set up event listeners
-function setupEventListeners() {
-    // Tab navigation
-    const navItems = document.querySelectorAll('.nav-item');
-    navItems.forEach(item => {
-        item.addEventListener('click', function() {
-            const tabName = this.dataset.tab;
-            switchTab(tabName);
-            
-            // Update page title
-            updatePageTitle(tabName);
-            
-            if (tabName === 'analytics') {
-                updateAnalytics();
-            }
-        });
-    });
-    
-    // Add habit buttons
-    document.getElementById('add-habit-btn').addEventListener('click', showAddHabitModal);
-    document.getElementById('mobile-add-btn').addEventListener('click', showAddHabitModal);
-    
-    // Content tabs (filters)
-    const contentTabs = document.querySelectorAll('.content-tab');
-    contentTabs.forEach(tab => {
-        tab.addEventListener('click', function() {
-            contentTabs.forEach(t => t.classList.remove('active'));
-            this.classList.add('active');
-            filterHabits(this.dataset.filter);
-        });
-    });
-    
-    // Close modal
-    document.querySelector('.close-btn').addEventListener('click', closeModal);
-    document.getElementById('cancel-btn').addEventListener('click', closeModal);
-    
-    // Submit habit form
-    document.getElementById('habit-form').addEventListener('submit', saveHabit);
-    
-    // Icon selection
-    const iconOptions = document.querySelectorAll('.icon-option');
-    iconOptions.forEach(option => {
-        option.addEventListener('click', function() {
-            selectIcon(this.dataset.icon);
-        });
-    });
-    
-    // Weekday selection
-    const weekdayButtons = document.querySelectorAll('.weekday-btn');
-    weekdayButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            toggleWeekday(parseInt(this.dataset.day));
-        });
-    });
-    
-    // Analytics controls
-    document.getElementById('analytics-type').addEventListener('change', updateAnalytics);
-    document.getElementById('analytics-habit').addEventListener('change', updateAnalytics);
-    
-    // Notification time
-    document.getElementById('notification-time').addEventListener('change', function() {
-        localStorage.setItem('notificationTime', this.value);
-    });
-    
-    // Clear data
-    document.getElementById('clear-data').addEventListener('click', clearData);
+function formatDate(date) {
+    return new Date(date).toISOString().split('T')[0];
 }
 
-// Switch tabs
-function switchTab(tabName) {
-    const navItems = document.querySelectorAll('.nav-item');
-    const tabPanes = document.querySelectorAll('.tab-pane');
+function showToast(message) {
+    elements.toast.textContent = message;
+    elements.toast.classList.add('show');
     
-    navItems.forEach(item => {
-        item.classList.toggle('active', item.dataset.tab === tabName);
-    });
-    
-    tabPanes.forEach(pane => {
-        pane.classList.toggle('active', pane.id === tabName);
-    });
+    setTimeout(() => {
+        elements.toast.classList.remove('show');
+    }, 3000);
 }
 
-// Update page title
-function updatePageTitle(tabName) {
-    const pageTitle = document.getElementById('page-title');
-    
-    switch (tabName) {
-        case 'habits':
-            pageTitle.textContent = 'Habit Saya';
-            break;
-        case 'analytics':
-            pageTitle.textContent = 'Analitik';
-            break;
-        case 'settings':
-            pageTitle.textContent = 'Pengaturan';
-            break;
-    }
-}
-
-// Show add habit modal
-function showAddHabitModal() {
-    const modal = document.getElementById('habit-modal');
-    const modalTitle = document.getElementById('modal-title');
-    const form = document.getElementById('habit-form');
-    
-    modalTitle.textContent = 'Habit Baru';
-    form.reset();
-    
-    editingHabitId = null;
-    selectedIcon = 'fas fa-running';
-    selectedWeekdays = [0, 1, 2, 3, 4, 5, 6];
-    
-    // Reset icon selection
-    document.querySelectorAll('.icon-option').forEach(option => {
-        option.classList.toggle('selected', option.dataset.icon === selectedIcon);
-    });
-    
-    // Reset weekday selection
-    document.querySelectorAll('.weekday-btn').forEach(button => {
-        button.classList.add('selected');
-    });
-    
-    modal.classList.add('active');
-}
-
-// Show edit habit modal
-function showEditHabitModal(habitId) {
-    const habit = habits.find(h => h.id === habitId);
-    if (!habit) return;
-    
-    const modal = document.getElementById('habit-modal');
-    const modalTitle = document.getElementById('modal-title');
-    const form = document.getElementById('habit-form');
-    
-    modalTitle.textContent = 'Edit Habit';
-    
-    document.getElementById('habit-name').value = habit.name;
-    document.getElementById('habit-description').value = habit.description || '';
-    document.getElementById('habit-goal').value = habit.goal.amount;
-    document.getElementById('habit-goal-type').value = habit.goal.type;
-    document.getElementById('habit-reminder').value = habit.reminder || '';
-    
-    editingHabitId = habitId;
-    selectedIcon = habit.icon;
-    selectedWeekdays = habit.weekdays;
-    
-    // Update icon selection
-    document.querySelectorAll('.icon-option').forEach(option => {
-        option.classList.toggle('selected', option.dataset.icon === selectedIcon);
-    });
-    
-    // Update weekday selection
-    document.querySelectorAll('.weekday-btn').forEach(button => {
-        const day = parseInt(button.dataset.day);
-        button.classList.toggle('selected', selectedWeekdays.includes(day));
-    });
-    
-    modal.classList.add('active');
-}
-
-// Close modal
-function closeModal() {
-    const modal = document.getElementById('habit-modal');
-    modal.classList.remove('active');
-}
-
-// Select icon
-function selectIcon(icon) {
-    selectedIcon = icon;
-    document.querySelectorAll('.icon-option').forEach(option => {
-        option.classList.toggle('selected', option.dataset.icon === icon);
-    });
-}
-
-// Toggle weekday
-function toggleWeekday(day) {
-    const index = selectedWeekdays.indexOf(day);
-    if (index === -1) {
-        selectedWeekdays.push(day);
-    } else {
-        selectedWeekdays.splice(index, 1);
-    }
-    
-    document.querySelectorAll('.weekday-btn').forEach(button => {
-        const buttonDay = parseInt(button.dataset.day);
-        button.classList.toggle('selected', selectedWeekdays.includes(buttonDay));
-    });
-}
-
-// Save habit
-function saveHabit(event) {
-    event.preventDefault();
-    
-    const name = document.getElementById('habit-name').value;
-    const description = document.getElementById('habit-description').value;
-    const goalAmount = parseInt(document.getElementById('habit-goal').value);
-    const goalType = document.getElementById('habit-goal-type').value;
-    const reminder = document.getElementById('habit-reminder').value;
-    
-    if (editingHabitId) {
-        // Update existing habit
-        const habitIndex = habits.findIndex(h => h.id === editingHabitId);
-        if (habitIndex !== -1) {
-            habits[habitIndex].name = name;
-            habits[habitIndex].description = description;
-            habits[habitIndex].icon = selectedIcon;
-            habits[habitIndex].goal = {
-                amount: goalAmount,
-                type: goalType
-            };
-            habits[habitIndex].weekdays = [...selectedWeekdays];
-            habits[habitIndex].reminder = reminder;
+function toggleEmptyState() {
+    if (state.habits.length === 0) {
+        if (elements.emptyHabits) {
+            elements.emptyHabits.style.display = 'flex';
+        }
+        if (elements.weeklyTrackerContainer) {
+            elements.weeklyTrackerContainer.style.display = 'none';
         }
     } else {
-        // Create new habit
-        const habit = {
-            id: Date.now().toString(),
-            name: name,
-            description: description,
-            icon: selectedIcon,
-            color: getRandomColor(),
-            goal: {
-                amount: goalAmount,
-                type: goalType
-            },
-            weekdays: [...selectedWeekdays],
-            reminder: reminder,
-            createdAt: new Date().toISOString(),
-            history: {}
-        };
-        
-        habits.push(habit);
+        if (elements.emptyHabits) {
+            elements.emptyHabits.style.display = 'none';
+        }
+        if (elements.weeklyTrackerContainer) {
+            elements.weeklyTrackerContainer.style.display = 'block';
+        }
+    }
+}
+
+function isHabitActiveToday(habit) {
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 is Sunday, 1 is Monday, etc.
+    
+    // Check if the specific day is selected
+    const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    return habit.selectedDays && habit.selectedDays[days[dayOfWeek]];
+}
+
+function isHabitActiveOnDate(habit, date) {
+    const dayOfWeek = date.getDay(); // 0 is Sunday, 1 is Monday, etc.
+    
+    // Check if habit was created after this date
+    if (habit.createdAt && new Date(habit.createdAt) > date) {
+        return false;
     }
     
-    saveHabits();
-    updateHabitsList();
-    updateAnalyticsHabitSelect();
-    closeModal();
+    // Check if the specific day is selected
+    const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    return habit.selectedDays && habit.selectedDays[days[dayOfWeek]];
 }
 
-// Generate random color in red tones
-function getRandomColor() {
-    const r = Math.floor(Math.random() * (255 - 200) + 200);
-    const g = Math.floor(Math.random() * 100);
-    const b = Math.floor(Math.random() * 100);
-    return `rgb(${r}, ${g}, ${b})`;
+function getDayName(index) {
+    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    return days[index];
 }
 
-// Load habits from storage
-function loadHabits() {
-    const savedHabits = localStorage.getItem('habits');
-    if (savedHabits) {
-        habits = JSON.parse(savedHabits);
-    }
+function getDayShortName(index) {
+    const days = ['MIN', 'SEN', 'SEL', 'RAB', 'KAM', 'JUM', 'SAB'];
+    return days[index];
 }
 
-// Save habits to storage
-function saveHabits() {
-    localStorage.setItem('habits', JSON.stringify(habits));
-}
-
-// Update UI
-function updateUI() {
-    updateHabitsList();
-    updateAnalyticsHabitSelect();
-}
-
-// Update habits list
-function updateHabitsList() {
-    const habitsList = document.getElementById('habits-list');
-    const activeFilter = document.querySelector('.content-tab.active').dataset.filter;
+function getWeekDates() {
     const today = new Date();
-    const dateKey = formatDateKey(today);
     const dayOfWeek = today.getDay();
+    const dates = [];
     
-    habitsList.innerHTML = '';
+    // Calculate first day (Sunday) of current week
+    const firstDay = new Date(today);
+    firstDay.setDate(today.getDate() - dayOfWeek);
     
-    if (habits.length === 0) {
-        habitsList.innerHTML = `
-            <div class="empty-state">
-                <p>Belum ada habit yang dibuat. Tambahkan habit baru untuk mulai melacak!</p>
-            </div>
-        `;
-        return;
+    // Get all 7 days of the week
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(firstDay);
+        date.setDate(firstDay.getDate() + i);
+        dates.push(date);
     }
     
-    const filteredHabits = habits.filter(habit => {
-        if (activeFilter === 'all') {
-            return habit.weekdays.includes(dayOfWeek);
-        } else if (activeFilter === 'active') {
-            const progress = habit.history[dateKey]?.progress || 0;
-            const completed = progress >= habit.goal.amount;
-            return habit.weekdays.includes(dayOfWeek) && !completed;
-        } else if (activeFilter === 'completed') {
-            const progress = habit.history[dateKey]?.progress || 0;
-            const completed = progress >= habit.goal.amount;
-            return habit.weekdays.includes(dayOfWeek) && completed;
-        }
-        return true;
-    });
-    
-    if (filteredHabits.length === 0) {
-        habitsList.innerHTML = `
-            <div class="empty-state">
-                <p>Tidak ada habit yang sesuai dengan filter saat ini.</p>
-            </div>
-        `;
-        return;
-    }
-    
-    filteredHabits.forEach(habit => {
-        const progress = habit.history[dateKey]?.progress || 0;
-        const progressPercentage = Math.min(100, (progress / habit.goal.amount) * 100);
-        const completed = progress >= habit.goal.amount;
-        
-        const habitElement = document.createElement('div');
-        habitElement.className = 'habit-item';
-        habitElement.innerHTML = `
-            <div class="habit-header">
-                <div class="habit-icon" style="background-color: ${habit.color}">
-                    <i class="${habit.icon}"></i>
-                </div>
-                <div>
-                    <h3 class="habit-name">${habit.name}</h3>
-                    ${habit.description ? `<p class="habit-description">${habit.description}</p>` : ''}
-                </div>
-            </div>
-            <div class="habit-body">
-                <div class="progress-info">
-                    <span class="progress-label">Progres hari ini</span>
-                    <span class="progress-value">${progress}/${habit.goal.amount} ${habit.goal.type === 'count' ? 'kali' : habit.goal.type === 'minutes' ? 'menit' : ''}</span>
-                </div>
-                <div class="progress-container">
-                    <div class="progress-bar" style="width: ${progressPercentage}%"></div>
-                </div>
-                <div class="habit-actions">
-                    <div class="action-btn-group">
-                        ${completed ? 
-                            `<button class="action-btn btn-complete" data-action="undo" data-id="${habit.id}"><i class="fas fa-undo"></i></button>` : 
-                            `<button class="action-btn btn-increment" data-action="increment" data-id="${habit.id}"><i class="fas fa-plus"></i></button>`
-                        }
-                    </div>
-                    <div class="action-btn-group">
-                        <button class="action-btn" data-action="edit" data-id="${habit.id}"><i class="fas fa-edit"></i></button>
-                        <button class="action-btn" data-action="delete" data-id="${habit.id}"><i class="fas fa-trash"></i></button>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        habitsList.appendChild(habitElement);
-        
-        // Add event listeners to action buttons
-        const actionButtons = habitElement.querySelectorAll('.action-btn');
-        actionButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                const action = this.dataset.action;
-                const habitId = this.dataset.id;
-                
-                switch (action) {
-                    case 'increment':
-                        incrementHabit(habitId);
-                        break;
-                    case 'undo':
-                        undoHabit(habitId);
-                        break;
-                    case 'edit':
-                        showEditHabitModal(habitId);
-                        break;
-                    case 'delete':
-                        confirmDeleteHabit(habitId);
-                        break;
-                }
-            });
-        });
-    });
+    return dates;
 }
 
-// Increment habit progress
-function incrementHabit(habitId) {
-    const habit = habits.find(h => h.id === habitId);
-    if (!habit) return;
+function getDatesInRange(startDate, endDate) {
+    const dates = [];
+    const currentDate = new Date(startDate);
     
+    while (currentDate <= endDate) {
+        dates.push(new Date(currentDate));
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return dates;
+}
+
+function getDaysDiff(date1, date2) {
+    const diffTime = Math.abs(date2 - date1);
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+}
+
+function formatDateForInput(date) {
+    return date.toISOString().split('T')[0];
+}
+
+function formatShortDate(date) {
+    return `${date.getDate()}/${date.getMonth() + 1}`;
+}
+
+function calculateStreak(habitId) {
     const today = new Date();
-    const dateKey = formatDateKey(today);
+    today.setHours(0, 0, 0, 0);
     
-    if (!habit.history[dateKey]) {
-        habit.history[dateKey] = {
-            date: today.toISOString(),
-            progress: 0
-        };
-    }
+    const habit = state.habits.find(h => h.id === habitId);
+    if (!habit) return 0;
     
-    if (habit.goal.type === 'check') {
-        habit.history[dateKey].progress = habit.goal.amount;
-    } else {
-        habit.history[dateKey].progress += 1;
-    }
+    const completions = state.completions
+        .filter(c => c.habitId === habitId)
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
     
-    saveHabits();
-    updateHabitsList();
-}
-
-// Undo habit progress
-function undoHabit(habitId) {
-    const habit = habits.find(h => h.id === habitId);
-    if (!habit) return;
+    if (completions.length === 0) return 0;
     
-    const today = new Date();
-    const dateKey = formatDateKey(today);
-    
-    if (habit.history[dateKey]) {
-        if (habit.goal.type === 'check') {
-            habit.history[dateKey].progress = 0;
-        } else {
-            habit.history[dateKey].progress = Math.max(0, habit.history[dateKey].progress - 1);
-        }
-    }
-    
-    saveHabits();
-    updateHabitsList();
-}
-
-// Confirm delete habit
-function confirmDeleteHabit(habitId) {
-    if (confirm('Apakah Anda yakin ingin menghapus habit ini?')) {
-        const habitIndex = habits.findIndex(h => h.id === habitId);
-        if (habitIndex !== -1) {
-            habits.splice(habitIndex, 1);
-            saveHabits();
-            updateHabitsList();
-            updateAnalyticsHabitSelect();
-        }
-    }
-}
-
-// Filter habits
-function filterHabits(filter) {
-    updateHabitsList();
-}
-
-// Update analytics habit select
-function updateAnalyticsHabitSelect() {
-    const select = document.getElementById('analytics-habit');
-    const currentValue = select.value;
-    
-    select.innerHTML = '<option value="all">Semua Habits</option>';
-    
-    habits.forEach(habit => {
-        const option = document.createElement('option');
-        option.value = habit.id;
-        option.textContent = habit.name;
-        select.appendChild(option);
-    });
-    
-    if (habits.find(h => h.id === currentValue)) {
-        select.value = currentValue;
-    }
-}
-
-// Update analytics
-function updateAnalytics() {
-    const type = document.getElementById('analytics-type').value;
-    const habitId = document.getElementById('analytics-habit').value;
-    
-    const data = getAnalyticsData(type, habitId);
-    updateAnalyticsChart(data, type);
-    updateAnalyticsStats(data);
-}
-
-// Get analytics data
-function getAnalyticsData(type, habitId) {
-    const today = new Date();
-    let startDate, endDate;
-    
-    switch (type) {
-        case 'daily':
-            startDate = new Date(today);
-            startDate.setDate(startDate.getDate() - 6);
-            endDate = today;
-            break;
-        case 'weekly':
-            startDate = new Date(today);
-            startDate.setDate(startDate.getDate() - (6 * 7));
-            endDate = today;
-            break;
-        case 'monthly':
-            startDate = new Date(today);
-            startDate.setMonth(startDate.getMonth() - 5);
-            endDate = today;
-            break;
-    }
-    
-    // Generate date labels
-    const labels = [];
-    const current = new Date(startDate);
-    
-    while (current <= endDate) {
-        let label;
-        if (type === 'daily') {
-            label = formatDateKey(current);
-        } else if (type === 'weekly') {
-            const weekNumber = getWeekNumber(current);
-            label = `${current.getFullYear()}-W${weekNumber}`;
-        } else if (type === 'monthly') {
-            label = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
-        }
-        
-        labels.push(label);
-        
-        if (type === 'daily') {
-            current.setDate(current.getDate() + 1);
-        } else if (type === 'weekly') {
-            current.setDate(current.getDate() + 7);
-        } else if (type === 'monthly') {
-            current.setMonth(current.getMonth() + 1);
-        }
-    }
-    
-    // Get habit data
-    let datasets = [];
-    
-    if (habitId === 'all') {
-        habits.forEach(habit => {
-            const data = getHabitData(habit, labels, type);
-            datasets.push({
-                label: habit.name,
-                data: data,
-                backgroundColor: hexToRgba(habit.color, 0.2),
-                borderColor: habit.color,
-                borderWidth: 2
-            });
-        });
-    } else {
-        const habit = habits.find(h => h.id === habitId);
-        if (habit) {
-            const data = getHabitData(habit, labels, type);
-            datasets.push({
-                label: habit.name,
-                data: data,
-                backgroundColor: 'rgba(255, 82, 82, 0.2)',
-                borderColor: 'rgb(255, 82, 82)',
-                borderWidth: 2
-            });
-        }
-    }
-    
-    return {
-        labels: formatAnalyticsLabels(labels, type),
-        datasets: datasets
-    };
-}
-
-// Get habit data
-function getHabitData(habit, labels, type) {
-    return labels.map(label => {
-        if (type === 'daily') {
-            // For daily, just get the progress for that day
-            return habit.history[label]?.progress || 0;
-        } else if (type === 'weekly') {
-            // For weekly, aggregate all days in that week
-            const [year, week] = label.split('-W');
-            let totalProgress = 0;
-            let count = 0;
-            
-            for (const dateKey in habit.history) {
-                const date = new Date(habit.history[dateKey].date);
-                const dateYear = date.getFullYear();
-                const dateWeek = getWeekNumber(date);
-                
-                if (dateYear === parseInt(year) && dateWeek === parseInt(week)) {
-                    totalProgress += habit.history[dateKey].progress;
-                    count++;
-                }
-            }
-            
-            return count > 0 ? (totalProgress / count) : 0;
-        } else if (type === 'monthly') {
-            // For monthly, aggregate all days in that month
-            const [year, month] = label.split('-');
-            let totalProgress = 0;
-            let count = 0;
-            
-            for (const dateKey in habit.history) {
-                const date = new Date(habit.history[dateKey].date);
-                const dateYear = date.getFullYear();
-                const dateMonth = String(date.getMonth() + 1).padStart(2, '0');
-                
-                if (dateYear === parseInt(year) && dateMonth === month) {
-                    totalProgress += habit.history[dateKey].progress;
-                    count++;
-                }
-            }
-            
-            return count > 0 ? (totalProgress / count) : 0;
-        }
-    });
-}
-
-// Update analytics chart
-function updateAnalyticsChart(data, type) {
-    const ctx = document.getElementById('analytics-chart').getContext('2d');
-    
-    if (chart) {
-        chart.destroy();
-    }
-    
-    chart = new Chart(ctx, {
-        type: 'line',
-        data: data,
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'top',
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    titleColor: '#333',
-                    bodyColor: '#333',
-                    borderColor: '#ddd',
-                    borderWidth: 1,
-                    cornerRadius: 8,
-                    padding: 12,
-                    boxPadding: 6
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(200, 200, 200, 0.1)',
-                    },
-                    ticks: {
-                        color: '#777'
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false
-                    },
-                    ticks: {
-                        color: '#777'
-                    }
-                }
-            },
-            elements: {
-                line: {
-                    tension: 0.3
-                },
-                point: {
-                    radius: 4,
-                    hoverRadius: 6
-                }
-            }
-        }
-    });
-}
-
-// Update analytics stats
-function updateAnalyticsStats(data) {
-    const completionRate = calculateCompletionRate();
-    const bestStreak = calculateBestStreak();
-    const currentStreak = calculateCurrentStreak();
-    
-    document.getElementById('completion-rate').textContent = `${completionRate}%`;
-    document.getElementById('best-streak').textContent = `${bestStreak} hari`;
-    document.getElementById('current-streak').textContent = `${currentStreak} hari`;
-}
-
-// Calculate completion rate
-function calculateCompletionRate() {
-    const today = new Date();
-    const habitId = document.getElementById('analytics-habit').value;
-    let completedCount = 0;
-    let totalCount = 0;
-    
-    if (habitId === 'all') {
-        // Check all habits
-        habits.forEach(habit => {
-            for (let i = 0; i < 30; i++) {
-                const date = new Date(today);
-                date.setDate(date.getDate() - i);
-                const dateKey = formatDateKey(date);
-                const dayOfWeek = date.getDay();
-                
-                if (habit.weekdays.includes(dayOfWeek)) {
-                    totalCount++;
-                    const progress = habit.history[dateKey]?.progress || 0;
-                    if (progress >= habit.goal.amount) {
-                        completedCount++;
-                    }
-                }
-            }
-        });
-    } else {
-        // Check specific habit
-        const habit = habits.find(h => h.id === habitId);
-        if (habit) {
-            for (let i = 0; i < 30; i++) {
-                const date = new Date(today);
-                date.setDate(date.getDate() - i);
-                const dateKey = formatDateKey(date);
-                const dayOfWeek = date.getDay();
-                
-                if (habit.weekdays.includes(dayOfWeek)) {
-                    totalCount++;
-                    const progress = habit.history[dateKey]?.progress || 0;
-                    if (progress >= habit.goal.amount) {
-                        completedCount++;
-                    }
-                }
-            }
-        }
-    }
-    
-    return totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-}
-
-// Calculate best streak
-function calculateBestStreak() {
-    const habitId = document.getElementById('analytics-habit').value;
-    let bestStreak = 0;
-    
-    if (habitId === 'all') {
-        // Check all habits combined
-        let currentStreak = 0;
-        
-        for (let i = 0; i < 365; i++) {
-            const date = new Date();
-            date.setDate(date.getDate() - i);
-            const dateKey = formatDateKey(date);
-            let allCompleted = true;
-            
-            habits.forEach(habit => {
-                const dayOfWeek = date.getDay();
-                if (habit.weekdays.includes(dayOfWeek)) {
-                    const progress = habit.history[dateKey]?.progress || 0;
-                    if (progress < habit.goal.amount) {
-                        allCompleted = false;
-                    }
-                }
-            });
-            
-            if (allCompleted && habits.some(h => h.weekdays.includes(date.getDay()))) {
-                currentStreak++;
-            } else {
-                bestStreak = Math.max(bestStreak, currentStreak);
-                currentStreak = 0;
-            }
-        }
-        
-        bestStreak = Math.max(bestStreak, currentStreak);
-    } else {
-        // Check specific habit
-        const habit = habits.find(h => h.id === habitId);
-        if (habit) {
-            let currentStreak = 0;
-            
-            for (let i = 0; i < 365; i++) {
-                const date = new Date();
-                date.setDate(date.getDate() - i);
-                const dateKey = formatDateKey(date);
-                const dayOfWeek = date.getDay();
-                
-                if (habit.weekdays.includes(dayOfWeek)) {
-                    const progress = habit.history[dateKey]?.progress || 0;
-                    if (progress >= habit.goal.amount) {
-                        currentStreak++;
-                    } else {
-                        bestStreak = Math.max(bestStreak, currentStreak);
-                        currentStreak = 0;
-                    }
-                }
-            }
-            
-            bestStreak = Math.max(bestStreak, currentStreak);
-        }
-    }
-    
-    return bestStreak;
-}
-
-// Calculate current streak
-function calculateCurrentStreak() {
-    const habitId = document.getElementById('analytics-habit').value;
     let currentStreak = 0;
+    let currentDate = today;
     
-    if (habitId === 'all') {
-        // Check all habits combined
-        for (let i = 0; i < 365; i++) {
-            const date = new Date();
-            date.setDate(date.getDate() - i);
-            const dateKey = formatDateKey(date);
-            let allCompleted = true;
-            
-            habits.forEach(habit => {
-                const dayOfWeek = date.getDay();
-                if (habit.weekdays.includes(dayOfWeek)) {
-                    const progress = habit.history[dateKey]?.progress || 0;
-                    if (progress < habit.goal.amount) {
-                        allCompleted = false;
-                    }
-                }
-            });
-            
-            if (allCompleted && habits.some(h => h.weekdays.includes(date.getDay()))) {
-                currentStreak++;
-            } else {
-                break;
-            }
-        }
-    } else {
-        // Check specific habit
-        const habit = habits.find(h => h.id === habitId);
-        if (habit) {
-            for (let i = 0; i < 365; i++) {
-                const date = new Date();
-                date.setDate(date.getDate() - i);
-                const dateKey = formatDateKey(date);
-                const dayOfWeek = date.getDay();
-                
-                if (habit.weekdays.includes(dayOfWeek)) {
-                    const progress = habit.history[dateKey]?.progress || 0;
-                    if (progress >= habit.goal.amount) {
-                        currentStreak++;
-                    } else {
-                        break;
-                    }
-                }
-            }
+    for (let i = 0; i < completions.length; i++) {
+        const completion = completions[i];
+        const completionDate = new Date(completion.date);
+        completionDate.setHours(0, 0, 0, 0);
+        
+        // If there's a gap larger than 1 day, the streak is broken
+        const daysDiff = getDaysDiff(currentDate, completionDate);
+        
+        if (daysDiff > 1) break;
+        
+        // If this is exactly the next day or the same day, increment streak
+        if (daysDiff <= 1) {
+            currentStreak++;
+            currentDate = completionDate;
+            // Move the currentDate one day back to look for previous day
+            currentDate.setDate(currentDate.getDate() - 1);
         }
     }
     
     return currentStreak;
 }
 
-// Format date key
-function formatDateKey(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+function isHabitCompletedOnDate(habitId, date) {
+    const formattedDate = formatDate(date);
+    return state.completions.some(c => 
+        c.habitId === habitId && formatDate(c.date) === formattedDate
+    );
 }
 
-// Get week number
-function getWeekNumber(date) {
-    const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
-    const pastDaysOfYear = (date - firstDayOfYear) / 86400000;
-    return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+function countTodayCompletions() {
+    const today = formatDate(new Date());
+    const activeHabits = state.habits.filter(h => isHabitActiveToday(h));
+    const completedToday = state.completions.filter(c => 
+        formatDate(c.date) === today && 
+        activeHabits.some(h => h.id === c.habitId)
+    );
+    
+    return {
+        completed: completedToday.length,
+        total: activeHabits.length
+    };
 }
 
-// Format analytics labels
-function formatAnalyticsLabels(labels, type) {
-    if (type === 'daily') {
-        return labels.map(label => {
-            const [year, month, day] = label.split('-');
-            return `${day}/${month}`;
-        });
-    } else if (type === 'weekly') {
-        return labels.map(label => {
-            const [year, week] = label.split('-W');
-            return `Mg${week}`;
-        });
-    } else if (type === 'monthly') {
-        return labels.map(label => {
-            const [year, month] = label.split('-');
-            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
-            return monthNames[parseInt(month) - 1];
-        });
+function calculateLongestStreak() {
+    if (state.habits.length === 0) return 0;
+    
+    const streaks = state.habits.map(habit => {
+        return {
+            id: habit.id,
+            name: habit.name,
+            streak: calculateStreak(habit.id)
+        };
+    });
+    
+    streaks.sort((a, b) => b.streak - a.streak);
+    return streaks.length > 0 ? streaks[0].streak : 0;
+}
+
+function calculateSuccessRate() {
+    if (state.habits.length === 0) return 0;
+    
+    const last7Days = [];
+    const today = new Date();
+    
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() - i);
+        last7Days.push(formatDate(date));
     }
-    return labels;
+    
+    let possibleCompletions = 0;
+    let actualCompletions = 0;
+    
+    state.habits.forEach(habit => {
+        last7Days.forEach(date => {
+            const dateObj = new Date(date);
+            
+            // Check if the habit should be active on this day
+            if (isHabitActiveOnDate(habit, dateObj)) {
+                possibleCompletions++;
+                
+                if (isHabitCompletedOnDate(habit.id, date)) {
+                    actualCompletions++;
+                }
+            }
+        });
+    });
+    
+    return possibleCompletions === 0 ? 0 : Math.round((actualCompletions / possibleCompletions) * 100);
 }
 
-// Convert hex to rgba
-function hexToRgba(hex, alpha) {
-    // Handle RGB format
-    if (hex.startsWith('rgb')) {
-        const parts = hex.match(/\d+/g);
-        if (parts && parts.length >= 3) {
-            return `rgba(${parts[0]}, ${parts[1]}, ${parts[2]}, ${alpha})`;
+function updateStats() {
+    elements.activeHabitsCount.textContent = state.habits.length;
+    elements.longestStreak.textContent = calculateLongestStreak();
+    elements.successRate.textContent = `${calculateSuccessRate()}%`;
+    
+    const todayStats = countTodayCompletions();
+    elements.todayCompletion.textContent = `${todayStats.completed}/${todayStats.total}`;
+}
+
+// UI Functions
+function renderAllHabits() {
+    // Clear existing habits
+    if (elements.habitsList) {
+        const habitNodes = elements.habitsList.querySelectorAll('.habit-card');
+        habitNodes.forEach(node => node.remove());
+    
+        if (state.habits.length === 0) {
+            // Show empty state
+            if (elements.emptyHabits) {
+                elements.emptyHabits.style.display = 'flex';
+            }
+            return;
+        } else {
+            if (elements.emptyHabits) {
+                elements.emptyHabits.style.display = 'none';
+            }
         }
-        return hex;
+        
+        // Add habit cards
+        state.habits.forEach(habit => {
+            const streak = calculateStreak(habit.id);
+            const habitCard = document.createElement('div');
+            habitCard.classList.add('habit-card');
+            habitCard.dataset.id = habit.id;
+            
+            // Check if completed today
+            const isCompletedToday = isHabitCompletedOnDate(habit.id, new Date());
+            
+            // Format days display
+            const days = [];
+            if (habit.selectedDays) {
+                if (habit.selectedDays.sun) days.push('MIN');
+                if (habit.selectedDays.mon) days.push('SEN');
+                if (habit.selectedDays.tue) days.push('SEL');
+                if (habit.selectedDays.wed) days.push('RAB');
+                if (habit.selectedDays.thu) days.push('KAM');
+                if (habit.selectedDays.fri) days.push('JUM');
+                if (habit.selectedDays.sat) days.push('SAB');
+            }
+            const daysDisplay = days.join(', ');
+            
+            habitCard.innerHTML = `
+                <div class="habit-details">
+                    <div class="habit-name">${habit.name}${habit.goal ? ` - ${habit.goal}` : ''}</div>
+                    <div class="habit-meta">
+                        <div class="habit-frequency">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>${daysDisplay}</span>
+                        </div>
+                        <div class="habit-streak">
+                            <i class="fas fa-fire"></i>
+                            <span>Streak: ${streak}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="habit-actions">
+                    <button class="habit-action-btn complete-btn" data-id="${habit.id}" ${isCompletedToday ? 'disabled' : ''}>
+                        <i class="fas ${isCompletedToday ? 'fa-check' : 'fa-check'}"></i>
+                    </button>
+                    <button class="habit-action-btn" data-id="${habit.id}">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="habit-action-btn delete-btn" data-id="${habit.id}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+            
+            // Append to list
+            elements.habitsList.appendChild(habitCard);
+            
+            // Add event listeners
+            const editBtn = habitCard.querySelector('.fa-edit').parentNode;
+            editBtn.addEventListener('click', () => {
+                editHabit(habit.id);
+            });
+            
+            const deleteBtn = habitCard.querySelector('.fa-trash').parentNode;
+            deleteBtn.addEventListener('click', () => {
+                confirmDeleteHabit(habit.id);
+            });
+            
+            const completeBtn = habitCard.querySelector('.complete-btn');
+            if (!isCompletedToday) {
+                completeBtn.addEventListener('click', () => {
+                    completeHabit(habit.id);
+                });
+            } else {
+                completeBtn.style.backgroundColor = 'var(--success-color)';
+                completeBtn.style.color = 'white';
+            }
+        });
     }
-    
-    // Handle hex format
-    let r = 0, g = 0, b = 0;
-    if (hex.length === 4) {
-        r = parseInt(hex[1] + hex[1], 16);
-        g = parseInt(hex[2] + hex[2], 16);
-        b = parseInt(hex[3] + hex[3], 16);
-    } else if (hex.length === 7) {
-        r = parseInt(hex.slice(1, 3), 16);
-        g = parseInt(hex.slice(3, 5), 16);
-        b = parseInt(hex.slice(5, 7), 16);
-    }
-    
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-// Clear data
-function clearData() {
-    if (confirm('Apakah Anda yakin ingin menghapus semua data? Tindakan ini tidak dapat dibatalkan.')) {
-        habits = [];
-        saveHabits();
-        updateUI();
-        alert('Semua data berhasil dihapus.');
+function renderWeeklyTracker() {
+    if (state.habits.length === 0) {
+        elements.weeklyTracker.innerHTML = '';
+        return;
+    }
+    
+    const weekDates = getWeekDates();
+    let trackerHTML = `
+        <div class="tracker-grid">
+            <div class="tracker-header">Kebiasaan</div>
+    `;
+    
+    // Add day headers
+    weekDates.forEach((date, index) => {
+        const isToday = formatDate(date) === formatDate(new Date());
+        trackerHTML += `
+            <div class="tracker-header" style="${isToday ? 'color: var(--primary-color); font-weight: 700;' : ''}">
+                ${getDayShortName(date.getDay())}
+                <div style="font-size: 0.8rem; opacity: 0.7;">${date.getDate()}/${date.getMonth() + 1}</div>
+            </div>
+        `;
+    });
+    
+    // Add habits and tracking cells
+    state.habits.forEach(habit => {
+        trackerHTML += `<div class="tracker-habit">${habit.name}</div>`;
+        
+        weekDates.forEach(date => {
+            const dateStr = formatDate(date);
+            const isCompleted = state.completions.some(c => c.habitId === habit.id && formatDate(c.date) === dateStr);
+            const isPast = date < new Date(new Date().setHours(0, 0, 0, 0));
+            const shouldBeActive = isHabitActiveOnDate(habit, date);
+            
+            if (shouldBeActive) {
+                if (isCompleted) {
+                    trackerHTML += `<div class="tracker-cell completed"><i class="fas fa-check"></i></div>`;
+                } else if (isPast) {
+                    trackerHTML += `<div class="tracker-cell missed"></div>`;
+                } else {
+                    trackerHTML += `<div class="tracker-cell"></div>`;
+                }
+            } else {
+                trackerHTML += `<div class="tracker-cell" style="background-color: #f8f8f8; cursor: default;"></div>`;
+            }
+        });
+    });
+    
+    trackerHTML += `</div>`;
+    elements.weeklyTracker.innerHTML = trackerHTML;
+}
+
+// Initialize Analytics Time Range
+function initializeAnalyticsTimeRange() {
+    changeTimeRange('week'); // Default to week view
+    
+    // Add click event listeners to analytics tabs
+    if (elements.analyticsTabs) {
+        elements.analyticsTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Remove active class from all tabs
+                elements.analyticsTabs.forEach(t => t.classList.remove('active'));
+                
+                // Add active class to clicked tab
+                tab.classList.add('active');
+                
+                // Change time range
+                changeTimeRange(tab.dataset.range);
+            });
+        });
     }
 }
+
+// Update current period text
+function updateCurrentPeriodText() {
+    if (!elements.currentPeriodText) return;
+    
+    const formatOptions = { 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric' 
+    };
+    
+    const startDateStr = state.analytics.startDate.toLocaleDateString('id-ID', formatOptions);
+    const endDateStr = state.analytics.endDate.toLocaleDateString('id-ID', formatOptions);
+    
+    let periodText = '';
+    
+    switch(state.analytics.timeRange) {
+        case 'day':
+            periodText = startDateStr;
+            break;
+        case 'week':
+            periodText = `${startDateStr} - ${endDateStr}`;
+            break;
+        case 'month':
+            periodText = state.analytics.startDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+            break;
+        default:
+            periodText = `${startDateStr} - ${endDateStr}`;
+    }
+    
+    elements.currentPeriodText.textContent = periodText;
+}
+
+// Change time range
+function changeTimeRange(range) {
+    state.analytics.timeRange = range;
+    
+    const today = new Date();
+    let startDate, endDate;
+    
+    switch(range) {
+        case 'day':
+            startDate = new Date(today);
+            startDate.setHours(0, 0, 0, 0);
+            
+            endDate = new Date(today);
+            endDate.setHours(23, 59, 59, 999);
+            break;
+            
+        case 'week':
+            startDate = new Date(today);
+            startDate.setDate(today.getDate() - today.getDay()); // Start from Sunday
+            startDate.setHours(0, 0, 0, 0);
+            
+            endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + 6); // Until Saturday
+            endDate.setHours(23, 59, 59, 999);
+            break;
+            
+        case 'month':
+            startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+            startDate.setHours(0, 0, 0, 0);
+            
+            endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            endDate.setHours(23, 59, 59, 999);
+            break;
+            
+        default:
+            startDate = new Date(today);
+            startDate.setDate(today.getDate() - today.getDay());
+            startDate.setHours(0, 0, 0, 0);
+            
+            endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + 6);
+            endDate.setHours(23, 59, 59, 999);
+    }
+    
+    state.analytics.startDate = startDate;
+    state.analytics.endDate = endDate;
+    
+    updateCurrentPeriodText();
+    updateCharts();
+}
+
+// Navigate to previous period
+function navigateToPreviousPeriod() {
+    const currentStart = state.analytics.startDate;
+    const currentEnd = state.analytics.endDate;
+    
+    let newStart, newEnd;
+    
+    switch(state.analytics.timeRange) {
+        case 'day':
+            newStart = new Date(currentStart);
+            newStart.setDate(currentStart.getDate() - 1);
+            
+            newEnd = new Date(newStart);
+            newEnd.setHours(23, 59, 59, 999);
+            break;
+            
+        case 'week':
+            newStart = new Date(currentStart);
+            newStart.setDate(currentStart.getDate() - 7);
+            
+            newEnd = new Date(newStart);
+            newEnd.setDate(newStart.getDate() + 6);
+            newEnd.setHours(23, 59, 59, 999);
+            break;
+            
+        case 'month':
+            newStart = new Date(currentStart);
+            newStart.setMonth(currentStart.getMonth() - 1);
+            
+            newEnd = new Date(newStart.getFullYear(), newStart.getMonth() + 1, 0);
+            newEnd.setHours(23, 59, 59, 999);
+            break;
+    }
+    
+    state.analytics.startDate = newStart;
+    state.analytics.endDate = newEnd;
+    
+    updateCurrentPeriodText();
+    updateCharts();
+}
+
+// Navigate to next period
+function navigateToNextPeriod() {
+    const currentStart = state.analytics.startDate;
+    const currentEnd = state.analytics.endDate;
+    const today = new Date();
+    
+    let newStart, newEnd;
+    
+    switch(state.analytics.timeRange) {
+        case 'day':
+            newStart = new Date(currentStart);
+            newStart.setDate(currentStart.getDate() + 1);
+            
+            newEnd = new Date(newStart);
+            newEnd.setHours(23, 59, 59, 999);
+            break;
+            
+        case 'week':
+            newStart = new Date(currentStart);
+            newStart.setDate(currentStart.getDate() + 7);
+            
+            newEnd = new Date(newStart);
+            newEnd.setDate(newStart.getDate() + 6);
+            newEnd.setHours(23, 59, 59, 999);
+            break;
+            
+        case 'month':
+            newStart = new Date(currentStart);
+            newStart.setMonth(currentStart.getMonth() + 1);
+            
+            newEnd = new Date(newStart.getFullYear(), newStart.getMonth() + 1, 0);
+            newEnd.setHours(23, 59, 59, 999);
+            break;
+    }
+    
+    // Don't go beyond today
+    if (newEnd > today) {
+        // If we're in day view and trying to go beyond today
+        if (state.analytics.timeRange === 'day' && newStart > today) {
+            return; // Don't update
+        }
+        
+        // Otherwise adjust the end date to today
+        if (newEnd > today) {
+            newEnd = new Date(today);
+            newEnd.setHours(23, 59, 59, 999);
+        }
+    }
+    
+    state.analytics.startDate = newStart;
+    state.analytics.endDate = newEnd;
+    
+    updateCurrentPeriodText();
+    updateCharts();
+}
+
+function updateCharts() {
+    if (state.habits.length === 0) {
+        // Show placeholders
+        if (elements.successRatePlaceholder) elements.successRatePlaceholder.style.display = 'flex';
+        if (elements.topHabitsPlaceholder) elements.topHabitsPlaceholder.style.display = 'flex';
+        if (elements.categoryPlaceholder) elements.categoryPlaceholder.style.display = 'flex';
+        if (elements.dailyProgressPlaceholder) elements.dailyProgressPlaceholder.style.display = 'flex';
+        if (elements.monthlyOverviewPlaceholder) elements.monthlyOverviewPlaceholder.style.display = 'flex';
+        
+        // Hide charts
+        if (elements.successRateChart) elements.successRateChart.style.display = 'none';
+        if (elements.topHabitsChart) elements.topHabitsChart.style.display = 'none';
+        if (elements.categoryChart) elements.categoryChart.style.display = 'none';
+        if (elements.dailyProgressChart) elements.dailyProgressChart.style.display = 'none';
+        if (elements.monthlyOverviewChart) elements.monthlyOverviewChart.style.display = 'none';
+        return;
+    }
+    
+    // Get dates in the selected range
+    const datesInRange = getDatesInRange(state.analytics.startDate, state.analytics.endDate);
+    
+    // Success rate chart - Shows completion rate for each date in range
+    const successRateData = datesInRange.map(date => {
+        const dateStr = formatDate(date);
+        const activeHabits = state.habits.filter(h => isHabitActiveOnDate(h, date));
+        
+        const completedHabits = activeHabits.filter(h => 
+            state.completions.some(c => c.habitId === h.id && formatDate(c.date) === dateStr)
+        );
+        
+        return activeHabits.length === 0 ? 0 : Math.round((completedHabits.length / activeHabits.length) * 100);
+    });
+    
+    // Check if we have enough data for success rate chart
+    if (successRateData.some(rate => rate > 0) && elements.successRateChart) {
+        elements.successRatePlaceholder.style.display = 'none';
+        elements.successRateChart.style.display = 'block';
+        
+        if (state.charts.successRate) {
+            state.charts.successRate.destroy();
+        }
+        
+        // Format date labels based on time range
+        let dateLabels;
+        if (state.analytics.timeRange === 'month' || datesInRange.length > 14) {
+            // For month view or if too many dates, group by week
+            dateLabels = datesInRange.map(date => {
+                if (date.getDate() === 1 || date.getDay() === 0 || datesInRange.indexOf(date) === 0) {
+                    return formatShortDate(date);
+                }
+                return '';
+            });
+        } else {
+            dateLabels = datesInRange.map(date => formatShortDate(date));
+        }
+        
+        state.charts.successRate = new Chart(elements.successRateChart, {
+            type: 'line',
+            data: {
+                labels: dateLabels,
+                datasets: [{
+                    label: 'Tingkat Kesuksesan (%)',
+                    data: successRateData,
+                    borderColor: '#8B0000',
+                    backgroundColor: 'rgba(139, 0, 0, 0.1)',
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+    }
+    
+    // Top habits chart - Shows success rate for each habit in the selected period
+    const habitSuccessRates = state.habits.map(habit => {
+        let totalDays = 0;
+        let completedDays = 0;
+        
+        datesInRange.forEach(date => {
+            if (isHabitActiveOnDate(habit, date)) {
+                totalDays++;
+                
+                const dateStr = formatDate(date);
+                if (state.completions.some(c => c.habitId === habit.id && formatDate(c.date) === dateStr)) {
+                    completedDays++;
+                }
+            }
+        });
+        
+        return {
+            id: habit.id,
+            name: habit.name,
+            rate: totalDays === 0 ? 0 : Math.round((completedDays / totalDays) * 100),
+            completedDays,
+            totalDays
+        };
+    });
+    
+    // Sort by success rate
+    habitSuccessRates.sort((a, b) => b.rate - a.rate);
+    
+    // Only include habits that were active during this period
+    const activeHabits = habitSuccessRates.filter(h => h.totalDays > 0);
+    
+    if (activeHabits.length > 0 && elements.topHabitsChart) {
+        elements.topHabitsPlaceholder.style.display = 'none';
+        elements.topHabitsChart.style.display = 'block';
+        
+        if (state.charts.topHabits) {
+            state.charts.topHabits.destroy();
+        }
+        
+        state.charts.topHabits = new Chart(elements.topHabitsChart, {
+            type: 'bar',
+            data: {
+                labels: activeHabits.map(h => h.name),
+                datasets: [{
+                    label: 'Tingkat Kesuksesan (%)',
+                    data: activeHabits.map(h => h.rate),
+                    backgroundColor: 'rgba(139, 0, 0, 0.7)',
+                    borderColor: '#8B0000',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: function(context) {
+                                const habitData = activeHabits[context.dataIndex];
+                                return `Selesai: ${habitData.completedDays}/${habitData.totalDays} hari`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Category distribution chart - Shows distribution of habits by category for active habits in range
+    const categories = {};
+    state.habits.forEach(habit => {
+        // Only count if habit was active during this period
+        const wasActive = datesInRange.some(date => isHabitActiveOnDate(habit, date));
+        
+        if (wasActive) {
+            if (!categories[habit.category]) {
+                categories[habit.category] = 0;
+            }
+            categories[habit.category]++;
+        }
+    });
+    
+    const categoryLabels = {
+        health: 'Kesehatan',
+        fitness: 'Kebugaran',
+        productivity: 'Produktivitas',
+        mindfulness: 'Mindfulness',
+        learning: 'Pembelajaran',
+        finance: 'Keuangan',
+        other: 'Lainnya'
+    };
+    
+    const categoryColors = {
+        health: '#8B0000',
+        fitness: '#B22222',
+        productivity: '#FF0000',
+        mindfulness: '#DC143C',
+        learning: '#CD5C5C',
+        finance: '#F08080',
+        other: '#FA8072'
+    };
+    
+    if (Object.keys(categories).length > 0 && elements.categoryChart) {
+        elements.categoryPlaceholder.style.display = 'none';
+        elements.categoryChart.style.display = 'block';
+        
+        if (state.charts.category) {
+            state.charts.category.destroy();
+        }
+        
+        state.charts.category = new Chart(elements.categoryChart, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(categories).map(key => categoryLabels[key] || key),
+                datasets: [{
+                    data: Object.values(categories),
+                    backgroundColor: Object.keys(categories).map(key => categoryColors[key] || '#8B0000'),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 12,
+                            padding: 10
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.formattedValue;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = Math.round((context.raw / total) * 100);
+                                return `${label}: ${value} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Daily Progress Chart - Shows completed vs missed habits for each day
+    if (elements.dailyProgressChart) {
+        const completedData = [];
+        const missedData = [];
+        
+        datesInRange.forEach(date => {
+            const dateStr = formatDate(date);
+            const activeHabits = state.habits.filter(h => isHabitActiveOnDate(h, date));
+            
+            const completedHabits = activeHabits.filter(h => 
+                state.completions.some(c => c.habitId === h.id && formatDate(c.date) === dateStr)
+            );
+            
+            completedData.push(completedHabits.length);
+            missedData.push(activeHabits.length - completedHabits.length);
+        });
+        
+        // Format date labels based on time range
+        let dateLabels;
+        if (state.analytics.timeRange === 'month' || datesInRange.length > 14) {
+            // For month view or if too many dates, group by week
+            dateLabels = datesInRange.map(date => {
+                if (date.getDate() === 1 || date.getDay() === 0 || datesInRange.indexOf(date) === 0) {
+                    return formatShortDate(date);
+                }
+                return '';
+            });
+        } else {
+            dateLabels = datesInRange.map(date => formatShortDate(date));
+        }
+        
+        if (completedData.some(count => count > 0) || missedData.some(count => count > 0)) {
+            elements.dailyProgressPlaceholder.style.display = 'none';
+            elements.dailyProgressChart.style.display = 'block';
+            
+            if (state.charts.dailyProgress) {
+                state.charts.dailyProgress.destroy();
+            }
+            
+            state.charts.dailyProgress = new Chart(elements.dailyProgressChart, {
+                type: 'bar',
+                data: {
+                    labels: dateLabels,
+                    datasets: [
+                        {
+                            label: 'Selesai',
+                            data: completedData,
+                            backgroundColor: '#4caf50',
+                            borderColor: '#388e3c',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Terlewat',
+                            data: missedData,
+                            backgroundColor: '#8B0000',
+                            borderColor: '#800000',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            stacked: true
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
+    // Monthly Overview Chart - Shows trend across months
+    if (elements.monthlyOverviewChart) {
+        // Get all completions and group by month
+        const months = {};
+        const monthNames = [
+            'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 
+            'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'
+        ];
+        
+        // Get the last 6 months including current month
+        const today = new Date();
+        const monthsToShow = 6;
+        let labels = [];
+        let completionRates = [];
+        
+        for (let i = monthsToShow - 1; i >= 0; i--) {
+            const monthDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
+            const monthStr = `${monthDate.getFullYear()}-${monthDate.getMonth() + 1}`;
+            const monthLabel = `${monthNames[monthDate.getMonth()]} ${monthDate.getFullYear()}`;
+            
+            labels.push(monthLabel);
+            
+            // Calculate completion rate for this month
+            const startOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+            const endOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+            
+            let totalPossible = 0;
+            let totalCompleted = 0;
+            
+            // Loop through each day in the month
+            const daysInMonth = getDatesInRange(startOfMonth, endOfMonth);
+            
+            daysInMonth.forEach(date => {
+                const dateStr = formatDate(date);
+                const activeHabits = state.habits.filter(h => isHabitActiveOnDate(h, date));
+                
+                totalPossible += activeHabits.length;
+                
+                // Count completions
+                activeHabits.forEach(habit => {
+                    if (state.completions.some(c => c.habitId === habit.id && formatDate(c.date) === dateStr)) {
+                        totalCompleted++;
+                    }
+                });
+            });
+            
+            const rate = totalPossible === 0 ? 0 : Math.round((totalCompleted / totalPossible) * 100);
+            completionRates.push(rate);
+        }
+        
+        if (completionRates.some(rate => rate > 0)) {
+            elements.monthlyOverviewPlaceholder.style.display = 'none';
+            elements.monthlyOverviewChart.style.display = 'block';
+            
+            if (state.charts.monthlyOverview) {
+                state.charts.monthlyOverview.destroy();
+            }
+            
+            state.charts.monthlyOverview = new Chart(elements.monthlyOverviewChart, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Tingkat Kesuksesan Bulanan (%)',
+                        data: completionRates,
+                        borderColor: '#8B0000',
+                        backgroundColor: 'rgba(139, 0, 0, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+        }
+    }
+}
+
+// CRUD Operations
+function addHabit() {
+    const name = elements.habitName.value.trim();
+    const category = elements.habitCategory.value;
+    const goal = elements.habitGoal.value.trim();
+    const notes = elements.habitNotes.value.trim();
+    
+    if (!name || !category) {
+        showToast('Mohon lengkapi semua field yang diperlukan');
+        return;
+    }
+    
+    // Get selected days
+    const selectedDays = {};
+    elements.dayBoxes.forEach(box => {
+        const day = box.dataset.day;
+        selectedDays[day] = box.classList.contains('active');
+    });
+    
+    // Validate if at least one day is selected
+    const hasDaySelected = Object.values(selectedDays).some(selected => selected);
+    if (!hasDaySelected) {
+        showToast('Pilih minimal satu hari');
+        return;
+    }
+    
+    const habit = {
+        id: generateId(),
+        name,
+        category,
+        selectedDays,
+        goal,
+        notes,
+        createdAt: new Date()
+    };
+    
+    state.habits.push(habit);
+    saveToLocalStorage();
+    closeHabitModal();
+    renderAllHabits();
+    renderWeeklyTracker();
+    updateStats();
+    updateCharts();
+    showToast('Kebiasaan baru ditambahkan!');
+}
+
+function editHabit(habitId) {
+    const habit = state.habits.find(h => h.id === habitId);
+    if (!habit) return;
+    
+    state.editing = habitId;
+    elements.modalTitle.textContent = 'Edit Kebiasaan';
+    elements.habitId.value = habit.id;
+    elements.habitName.value = habit.name;
+    elements.habitCategory.value = habit.category;
+    elements.habitGoal.value = habit.goal || '';
+    elements.habitNotes.value = habit.notes || '';
+    
+    // Set active category
+    elements.categoryBoxes.forEach(box => {
+        if (box.dataset.category === habit.category) {
+            box.classList.add('active');
+        } else {
+            box.classList.remove('active');
+        }
+    });
+    
+    // Set active days
+    elements.dayBoxes.forEach(box => {
+        const day = box.dataset.day;
+        if (habit.selectedDays && habit.selectedDays[day]) {
+            box.classList.add('active');
+        } else {
+            box.classList.remove('active');
+        }
+    });
+    
+    openHabitModal();
+}
+
+function updateHabit() {
+    const id = elements.habitId.value;
+    const habit = state.habits.find(h => h.id === id);
+    if (!habit) return;
+    
+    const name = elements.habitName.value.trim();
+    const category = elements.habitCategory.value;
+    const goal = elements.habitGoal.value.trim();
+    const notes = elements.habitNotes.value.trim();
+    
+    if (!name || !category) {
+        showToast('Mohon lengkapi semua field yang diperlukan');
+        return;
+    }
+    
+    // Get selected days
+    const selectedDays = {};
+    elements.dayBoxes.forEach(box => {
+        const day = box.dataset.day;
+        selectedDays[day] = box.classList.contains('active');
+    });
+    
+    // Validate if at least one day is selected
+    const hasDaySelected = Object.values(selectedDays).some(selected => selected);
+    if (!hasDaySelected) {
+        showToast('Pilih minimal satu hari');
+        return;
+    }
+    
+    habit.name = name;
+    habit.category = category;
+    habit.selectedDays = selectedDays;
+    habit.goal = goal;
+    habit.notes = notes;
+    
+    saveToLocalStorage();
+    closeHabitModal();
+    renderAllHabits();
+    renderWeeklyTracker();
+    updateStats();
+    updateCharts();
+    showToast('Kebiasaan berhasil diperbarui!');
+}
+
+function deleteHabit(habitId) {
+    const index = state.habits.findIndex(h => h.id === habitId);
+    if (index === -1) return;
+    
+    state.habits.splice(index, 1);
+    state.completions = state.completions.filter(c => c.habitId !== habitId);
+    
+    saveToLocalStorage();
+    renderAllHabits();
+    renderWeeklyTracker();
+    updateStats();
+    updateCharts();
+    showToast('Kebiasaan berhasil dihapus!');
+    
+    // Check if we need to show empty state
+    toggleEmptyState();
+}
+
+function completeHabit(habitId) {
+    const today = formatDate(new Date());
+    
+    // Check if already completed today
+    const alreadyCompleted = state.completions.some(c => 
+        c.habitId === habitId && formatDate(c.date) === today
+    );
+    
+    if (alreadyCompleted) return;
+    
+    state.completions.push({
+        id: generateId(),
+        habitId,
+        date: new Date()
+    });
+    
+    saveToLocalStorage();
+    renderAllHabits();
+    renderWeeklyTracker();
+    updateStats();
+    updateCharts();
+    showToast('Kebiasaan selesai hari ini!');
+}
+
+function confirmDeleteHabit(habitId) {
+    const habit = state.habits.find(h => h.id === habitId);
+    if (!habit) return;
+    
+    state.deleteId = habitId;
+    elements.confirmTitle.textContent = 'Hapus Kebiasaan?';
+    elements.confirmMessage.textContent = `Apakah Anda yakin ingin menghapus "${habit.name}"? Tindakan ini tidak dapat dibatalkan.`;
+    elements.confirmAction.textContent = 'Hapus';
+    elements.confirmDialog.classList.add('active');
+}
+
+// Modal Functions
+function openHabitModal() {
+    elements.habitModal.classList.add('active');
+    setupCategorySelectors();
+    setupDaySelectors();
+}
+
+function closeHabitModal() {
+    elements.habitModal.classList.remove('active');
+    elements.habitForm.reset();
+    state.editing = null;
+    elements.modalTitle.textContent = 'Tambah Kebiasaan Baru';
+    
+    // Reset category selections
+    elements.categoryBoxes.forEach(box => {
+        box.classList.remove('active');
+    });
+    
+    // Reset day selections
+    elements.dayBoxes.forEach(box => {
+        box.classList.remove('active');
+    });
+}
+
+// Setup category selectors
+function setupCategorySelectors() {
+    elements.categoryBoxes.forEach(box => {
+        box.addEventListener('click', function() {
+            // Remove active class from all boxes
+            elements.categoryBoxes.forEach(b => {
+                b.classList.remove('active');
+            });
+            
+            // Add active class to selected box
+            this.classList.add('active');
+            
+            // Set hidden input value
+            elements.habitCategory.value = this.dataset.category;
+        });
+    });
+}
+
+// Setup day selectors
+function setupDaySelectors() {
+    elements.dayBoxes.forEach(box => {
+        box.addEventListener('click', function() {
+            // Toggle active class
+            this.classList.toggle('active');
+        });
+    });
+}
+
+// Event Listeners
+function setupEventListeners() {
+    // Add habit buttons
+    if (elements.addHabitBtn) {
+        elements.addHabitBtn.addEventListener('click', () => {
+            state.editing = null;
+            elements.modalTitle.textContent = 'Tambah Kebiasaan Baru';
+            elements.habitForm.reset();
+            
+            // Reset category selections
+            elements.categoryBoxes.forEach(box => {
+                box.classList.remove('active');
+            });
+            
+            // Reset day selections
+            elements.dayBoxes.forEach(box => {
+                box.classList.remove('active');
+            });
+            
+            openHabitModal();
+        });
+    }
+    
+    if (elements.habitPageAddBtn) {
+        elements.habitPageAddBtn.addEventListener('click', () => {
+            state.editing = null;
+            elements.modalTitle.textContent = 'Tambah Kebiasaan Baru';
+            elements.habitForm.reset();
+            
+            // Reset category selections
+            elements.categoryBoxes.forEach(box => {
+                box.classList.remove('active');
+            });
+            
+            // Reset day selections
+            elements.dayBoxes.forEach(box => {
+                box.classList.remove('active');
+            });
+            
+            openHabitModal();
+        });
+    }
+    
+    // Modal buttons
+    elements.closeModalBtn.addEventListener('click', closeHabitModal);
+    elements.cancelHabitBtn.addEventListener('click', closeHabitModal);
+    
+    elements.saveHabitBtn.addEventListener('click', () => {
+        if (state.editing) {
+            updateHabit();
+        } else {
+            addHabit();
+        }
+    });
+    
+    // Setup initial event listeners for category boxes
+    setupCategorySelectors();
+    
+    // Setup initial event listeners for day boxes
+    setupDaySelectors();
+    
+    // Navigation
+    elements.navItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetPage = item.dataset.page;
+            
+            // Update nav items
+            elements.navItems.forEach(nav => nav.classList.remove('active'));
+            item.classList.add('active');
+            
+            // Update pages
+            elements.pages.forEach(page => page.classList.remove('active'));
+            document.getElementById(targetPage).classList.add('active');
+            
+            // Update charts if switching to analytics page
+            if (targetPage === 'analytics-page') {
+                updateCharts();
+            }
+            
+            // Update habits list if switching to habits page
+            if (targetPage === 'habits-page') {
+                renderAllHabits();
+            }
+        });
+    });
+    
+    // Confirm dialog
+    elements.confirmAction.addEventListener('click', () => {
+        if (state.deleteId) {
+            deleteHabit(state.deleteId);
+            state.deleteId = null;
+        }
+        elements.confirmDialog.classList.remove('active');
+    });
+    
+    elements.cancelConfirm.addEventListener('click', () => {
+        elements.confirmDialog.classList.remove('active');
+        state.deleteId = null;
+    });
+    
+    // Analytics navigation buttons
+    if (elements.previousPeriodBtn) {
+        elements.previousPeriodBtn.addEventListener('click', navigateToPreviousPeriod);
+    }
+    
+    if (elements.nextPeriodBtn) {
+        elements.nextPeriodBtn.addEventListener('click', navigateToNextPeriod);
+    }
+    
+    // Click outside modal to close
+    elements.habitModal.addEventListener('click', (e) => {
+        if (e.target === elements.habitModal) {
+            closeHabitModal();
+        }
+    });
+    
+    elements.confirmDialog.addEventListener('click', (e) => {
+        if (e.target === elements.confirmDialog) {
+            elements.confirmDialog.classList.remove('active');
+            state.deleteId = null;
+        }
+    });
+}
+
+// Initialize app
+function initApp() {
+    loadFromLocalStorage();
+    renderAllHabits();
+    renderWeeklyTracker();
+    updateStats();
+    initializeAnalyticsTimeRange();
+    setupEventListeners();
+    toggleEmptyState();
+}
+
+// Start the app when DOM is loaded
+document.addEventListener('DOMContentLoaded', initApp);
